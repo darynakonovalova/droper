@@ -10,7 +10,7 @@ const int DIGITAL_OUTPUT             = 3;
 const int INPUT_PIN                  = 20;
 const int PWM_STEP                   = 20;
 const int DEFAULT_LOW_PWM_BOUNDARY   = 802;
-const int DEFAULT_UPPER_PWM_BOUNDARY = 802;
+const int DEFAULT_UPPER_PWM_BOUNDARY = 818;
 
 
 Servo allServos[SERVOS_NUM];
