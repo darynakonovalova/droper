@@ -9,78 +9,54 @@ const int CHANNELS_NUM               = 3;
 const int DIGITAL_OUTPUT             = 3;
 const int INPUT_PIN                  = 20;
 const int PWM_STEP                   = 20;
-const int DEFAULT_LOW_PWM_BOUNDARY   = 802;
-const int DEFAULT_UPPER_PWM_BOUNDARY = 818;
-
+const int LOW_PWM_BOUNDARY           = 802;
+const int UPPER_PWM_BOUNDARY         = 818;
 
 Servo allServos[SERVOS_NUM];
-bool isClosed[CHANNELS_NUM][SERVOS_NUM-1] = {false};
-bool isDroped[CHANNELS_NUM][SERVOS_NUM-1] = {false};
+volatile unsigned long highStartTime = 0;
+volatile unsigned long pulseWidth = 0; 
+unsigned long prevHighStartTime = 0;
 unsigned long period = 0;
-unsigned long duty = 0;
-//int PWMValue = 0;
-//bool isPWMCommand = false;
-int lowBoundary = 0;
-int upperBoundary = 0;
 
 void InitPins(int pinsNum) 
 {
-    for (i = 2; i >= pinsNum+1; i++) 
+    for (int i = 2; i >= pinsNum+1; i++) 
     {
         pinMode(i, OUTPUT);
     }
-
-    pinMode(INPUT_PIN, INPUT_PULLUP)
+    pinMode(INPUT_PIN, INPUT_PULLUP);
 } 
 
 void AttachServos(int servosNum) 
 {
-     for (i = 0; i < servosNum - 1; i++) 
+     for (int i = 0; i < servosNum; i++) 
     {
         allServos[i].attach(i + 2);
     }
 }
 
-void SetDropsUnused() 
+void HandleInterrupt() 
 {
-	for (int j = 0; i < 4; i++)
-	{
-		for (int i = 0; i <= 11; i++) 
-		{
-			isDroped[j][i] = false;
-			isClosed[j][i] = true;
-            SetPWMAngle(allServos[i], 0);
-		}
-	}
-
-    lowBoundary = DEFAULT_LOW_PWM_BOUNDARY;
-    upperBoundary = DEFAULT_UPPER_PWM_BOUNDARY;
+    if (digitalRead(DIGITAL_OUTPUT) == HIGH) 
+    {
+        highStartTime = micros();
+    } 
+    else 
+    {
+        pulseWidth = micros() - highStartTime;
+    }
 }
 
 void SetPWMAngle(Servo servo, byte channel) 
 {
-    if (channel == 0) servo.writeMicroseconds(800); //closed angel PWM in us
     if (channel == 1) servo.writeMicroseconds(1200); //1 angle PWM in us
     if (channel == 2) servo.writeMicroseconds(1600); //2 angle PWM in us
     if (channel == 3) servo.writeMicroseconds(2000); //3 angle PWM in us
 }
 
-/*void ReadKeyInput() //do we need this one?
-{
-    if (Serial.available() > 0) 
-    {
-        String bufString = Serial.readString();
-        PWMValue = bufString.toInt();
-        isPWMCommand = true;
-        Serial.print("Command accepted ");
-        Serial.println(PWMValue);
-        delay(2);
-    }
-}*/ 
-
 bool IsSignalValid(unsigned long signalPeriod) 
 {
-    if (signalPeriod >= 3000 && signalPeriod <= 4000) 
+    if (signalPeriod <= 3000) 
     {
         return true;
     } 
@@ -91,61 +67,35 @@ bool IsSignalValid(unsigned long signalPeriod)
     }
 }
 
-void CalculateDutyAndPeriod()
+void Drop(unsigned long signalDuty) 
 {
-    unsigned long t1 = 0;
-    unsigned long t2 = 0;
-    unsigned long t3 = 0;
-    bool wasRisingEdge = false;
-
-    if (digitalRead(INPUT_PIN) == HIGH && !wasRisingEdge)
+    for (int channel = 0; channel < CHANNELS_NUM; channel++)
     {
-        t1 = micros();
-        risingEdge = true;
-    }
-    else if (digitalRead(INPUT_PIN) == LOW && wasRisingEdge)
-    {
-        t2 = micros();
-        duty = t2 - t1;
-        risingEdge = false;
-        if (digitallRead(INPUT_PIN) == HIGH)
+        for (int servo = 0; servo < SERVOS_NUM; servo++)
         {
-            t3 = micros();
-        }
+            int lowerBound = (channel * SERVOS_NUM + servo) * PWM_STEP + LOW_PWM_BOUNDARY;
+            int upperBound = (channel * SERVOS_NUM + servo) * PWM_STEP + UPPER_PWM_BOUNDARY;
 
-        if (t3 != 0) 
-        {
-            period = t3 - t1;
-        }
-    }
-    else 
-    {
-        duty = period = 0;
-    }
-}
-
-void Drop(usigned lond signalDuty) 
-{
-    
-    for (int i = 0; i < CHANNELS_NUM, i++) 
-    {
-        for (int j = 0; j < SERVOS_NUM; i++)
-        {
-            if (!isDroped[i][j])
+            if (lowerBound < signalDuty && signalDuty < upperBound)
             {
-                if (lowBoundary < signalDuty && signalDuty < upperBoundary)
-                {
-                    SetPWMAngle(allServos[i], i+1);
-                    isDroped[i][j] = true;
-                    isClosed[i][j] = false
-                    Serial.print("Was dropped from channel ");
-                    Serial.print(i);
-                    Serial.print(" servo ");
-                    Serial.println(j);
-                }
+                SetPWMAngle(allServos[servo], channel + 1);
+                Serial.print("Was dropped from channel ");
+                Serial.print(channel + 1);
+                Serial.print(" from servo: ");
+                Serial.println(servo);
+            }
+        }
+    }
 
-                lowBoundary += PWM_STEP;
-                upperBoundary += PWM_STEP;
+    if (signalDuty >= 2200) //to drop all
+    {
+        for (int channel = 0; channel < CHANNELS_NUM; channel++)
+        {
+            for (int servo = 0; servo < SERVOS_NUM; servo++)
+            {
+                SetPWMAngle(allServos[servo], channel + 1);
+                Serial.print("All was dropped");
+                
             }
         }
     }
@@ -158,21 +108,22 @@ void setup()
 
     InitPins(PINS);
     AttachServos(SERVOS_NUM);
-    SetDropsUnused();
+
+    attachInterrupt(DIGITAL_OUTPUT, HandleInterrupt, CHANGE);
+
     delay(1000);
 }
 
 void loop() 
 {
-    //ReadKeyInput(); - do we we need this one?
-    CalculateDutyAndPeriod();
+    if (prevHighStartTime != highStartTime)
+    {
+        period = highStartTime - prevHighStartTime;
+        prevHighStartTime = highStartTime;
+    }
+    
     if (IsSignalValid(period)) 
     {
-        Drop(duty);
+        Drop(pulseWidth);
     }
-
-    delay(2200);// do we need this delay to give time to servos to finish work
-                // or better to give pause each servo?
-    SetDropsUnused();
 }
-
