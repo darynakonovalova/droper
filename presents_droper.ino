@@ -37,7 +37,7 @@ void AttachServos(int servosNum)
 
 void HandleInterrupt() 
 {
-    if (digitalRead(DIGITAL_OUTPUT) == HIGH) 
+    if (digitalRead(INPUT_PIN) == HIGH) 
     {
         highStartTime = micros();
     } 
@@ -56,7 +56,7 @@ void SetPWMAngle(Servo servo, byte channel)
 
 bool IsSignalValid(unsigned long signalPeriod) 
 {
-    if (signalPeriod <= 3000) 
+    if (signalPeriod >= 3000) 
     {
         return true;
     } 
@@ -94,7 +94,7 @@ void Drop(unsigned long signalDuty)
             for (int servo = 0; servo < SERVOS_NUM; servo++)
             {
                 SetPWMAngle(allServos[servo], channel + 1);
-                Serial.print("All was dropped");
+                Serial.print("All ware dropped");
                 
             }
         }
