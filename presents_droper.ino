@@ -3,13 +3,15 @@
 
 /*Parameters*/
 const int BAUDRATE                   = 9600;
+// TODO: PINS == SERVOS_NUM always, do we need PINS?
 const int PINS                       = 12;
 const int SERVOS_NUM                 = 12;
 const int CHANNELS_NUM               = 3;
+// TODO: DIGITAL_OUTPUT not used since digitalPinToInterrupt
 const int DIGITAL_OUTPUT             = 3;
 const int INPUT_PIN                  = 20;
 const int PWM_STEP                   = 20;
-const int LOW_PWM_BOUNDARY           = 802;
+const int LOWER_PWM_BOUNDARY         = 802;
 const int UPPER_PWM_BOUNDARY         = 818;
 
 Servo allServos[SERVOS_NUM];
@@ -20,16 +22,16 @@ unsigned long period = 0;
 
 void InitPins(int pinsNum) 
 {
-    for (int i = 2; i >= pinsNum+1; i++) 
+    for (int i = 0; i < pinsNum; i++) 
     {
-        pinMode(i, OUTPUT);
+        pinMode(i + 2, OUTPUT);
     }
     pinMode(INPUT_PIN, INPUT_PULLUP);
 } 
 
 void AttachServos(int servosNum) 
 {
-     for (int i = 0; i < servosNum; i++) 
+    for (int i = 0; i < servosNum; i++) 
     {
         allServos[i].attach(i + 2);
     }
@@ -49,6 +51,7 @@ void HandleInterrupt()
 
 void SetPWMAngle(Servo servo, byte channel) 
 {
+    // TODO: how to move servo to "closed" position?
     if (channel == 1) servo.writeMicroseconds(1200); //1 angle PWM in us
     if (channel == 2) servo.writeMicroseconds(1600); //2 angle PWM in us
     if (channel == 3) servo.writeMicroseconds(2000); //3 angle PWM in us
@@ -56,24 +59,25 @@ void SetPWMAngle(Servo servo, byte channel)
 
 bool IsSignalValid(unsigned long signalPeriod) 
 {
+    // TODO: refine the acceptable pwm range
     if (signalPeriod >= 3000) 
     {
         return true;
     } 
     else
     {
-        Serial.println("Invalid Signal");
         return false;
     }
 }
 
 void Drop(unsigned long signalDuty) 
 {
+    // TODO: if signalDuty is outside the working range, skip the following loop
     for (int channel = 0; channel < CHANNELS_NUM; channel++)
     {
         for (int servo = 0; servo < SERVOS_NUM; servo++)
         {
-            int lowerBound = (channel * SERVOS_NUM + servo) * PWM_STEP + LOW_PWM_BOUNDARY;
+            int lowerBound = (channel * SERVOS_NUM + servo) * PWM_STEP + LOWER_PWM_BOUNDARY;
             int upperBound = (channel * SERVOS_NUM + servo) * PWM_STEP + UPPER_PWM_BOUNDARY;
 
             if (lowerBound < signalDuty && signalDuty < upperBound)
@@ -94,10 +98,10 @@ void Drop(unsigned long signalDuty)
             for (int servo = 0; servo < SERVOS_NUM; servo++)
             {
                 SetPWMAngle(allServos[servo], channel + 1);
-                Serial.print("All ware dropped");
-                
             }
         }
+        // TODO: if there were no drops, do not send the message (flooding)
+        Serial.println("All were dropped");
     }
 }
 
@@ -109,7 +113,7 @@ void setup()
     InitPins(PINS);
     AttachServos(SERVOS_NUM);
 
-    attachInterrupt(DIGITAL_OUTPUT, HandleInterrupt, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(INPUT_PIN), HandleInterrupt, CHANGE);
 
     delay(1000);
 }
@@ -126,4 +130,8 @@ void loop()
     {
         Drop(pulseWidth);
     }
+    else
+    {
+        Serial.println("Invalid signal");
+    }        
 }
